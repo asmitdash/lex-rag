@@ -1,65 +1,72 @@
-import Image from "next/image";
+import Link from 'next/link'
 
 export default function Home() {
   return (
-    <div className="flex flex-col flex-1 items-center justify-center bg-zinc-50 font-sans dark:bg-black">
-      <main className="flex flex-1 w-full max-w-3xl flex-col items-center justify-between py-32 px-16 bg-white dark:bg-black sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className="flex flex-col items-center gap-6 text-center sm:items-start sm:text-left">
-          <h1 className="max-w-xs text-3xl font-semibold leading-10 tracking-tight text-black dark:text-zinc-50">
-            To get started, edit the page.tsx file.
+    <main className="flex flex-1 flex-col">
+      <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-white">
+        <div className="font-semibold text-lg tracking-tight">LexRAG</div>
+        <nav className="flex items-center gap-3">
+          <Link
+            href="/login"
+            className="text-sm px-3 py-1.5 rounded-md hover:bg-zinc-100"
+          >
+            Log in
+          </Link>
+          <Link
+            href="/signup"
+            className="text-sm px-3 py-1.5 rounded-md bg-zinc-900 text-white hover:bg-zinc-700"
+          >
+            Sign up
+          </Link>
+        </nav>
+      </header>
+
+      <section className="flex-1 flex items-center justify-center px-6 py-20">
+        <div className="max-w-3xl">
+          <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
+            AI assistant for Indian CAs &amp; Lawyers.
           </h1>
-          <p className="max-w-md text-lg leading-8 text-zinc-600 dark:text-zinc-400">
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              className="font-medium text-zinc-950 dark:text-zinc-50"
-            >
-              Learning
-            </a>{" "}
-            center.
+          <p className="mt-5 text-lg text-zinc-600 max-w-2xl">
+            Upload your books, statutes and notes. Ask questions in plain English
+            and get answers grounded in your own corpus — with citations to the
+            source. Built on the latest Indian codes (BNS / BNSS / BSA) and the
+            IT &amp; GST Acts.
           </p>
-        </div>
-        <div className="flex flex-col gap-4 text-base font-medium sm:flex-row">
-          <a
-            className="flex h-12 w-full items-center justify-center gap-2 rounded-full bg-foreground px-5 text-background transition-colors hover:bg-[#383838] dark:hover:bg-[#ccc] md:w-[158px]"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
+          <div className="mt-8 flex gap-3">
+            <Link
+              href="/signup"
+              className="inline-flex items-center justify-center px-5 py-2.5 rounded-md bg-zinc-900 text-white font-medium hover:bg-zinc-700"
+            >
+              Get started — free alpha
+            </Link>
+            <Link
+              href="/login"
+              className="inline-flex items-center justify-center px-5 py-2.5 rounded-md border border-zinc-300 hover:bg-zinc-100"
+            >
+              I have an account
+            </Link>
+          </div>
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-6">
+            <FeatureCard
+              title="For CAs"
+              body="Upload IT Act, GST Acts, your client notes and notice templates. Get drafted replies and section-cited research."
             />
-            Deploy Now
-          </a>
-          <a
-            className="flex h-12 w-full items-center justify-center rounded-full border border-solid border-black/[.08] px-5 transition-colors hover:border-transparent hover:bg-black/[.04] dark:border-white/[.145] dark:hover:bg-[#1a1a1a] md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
+            <FeatureCard
+              title="For Lawyers"
+              body="BNS / BNSS / BSA-aware research. Upload firm precedents, commentaries and judgments. CAs see only CA work — Lawyers see everything."
+            />
+          </div>
         </div>
-      </main>
+      </section>
+    </main>
+  )
+}
+
+function FeatureCard({ title, body }: { title: string; body: string }) {
+  return (
+    <div className="rounded-lg border border-zinc-200 bg-white p-5">
+      <h3 className="font-medium">{title}</h3>
+      <p className="mt-2 text-sm text-zinc-600">{body}</p>
     </div>
-  );
+  )
 }

@@ -1,36 +1,62 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# LexRAG
 
-## Getting Started
+AI assistant for Indian Chartered Accountants and Lawyers.
+RAG over a per-user document corpus, grounded in BNS / BNSS / BSA + IT & GST Acts.
 
-First, run the development server:
+## Stack
+
+- Next.js 16 (App Router) + TypeScript + Tailwind v4
+- Supabase: Postgres + pgvector + Auth + Storage
+- Google Gemini: `gemini-2.5-flash` (chat + PDF extraction), `gemini-embedding-001` (768-dim embeddings)
+
+## Roles
+
+- **CA** — sees only documents categorised as `ca`. All their uploads are forced to `ca`.
+- **Lawyer** — sees both `ca` and `non_ca`. Picks category per upload.
+
+Visibility is enforced by a SECURITY DEFINER Postgres RPC (`match_chunks`) that filters by `owner_id` and `user_role`.
+
+## Local dev
 
 ```bash
+cp .env.local.example .env.local   # then fill in values
+npm install
+node scripts/apply-migrations.mjs  # one-time: applies SQL to Supabase
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## Env vars
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+```
+NEXT_PUBLIC_SUPABASE_URL=
+NEXT_PUBLIC_SUPABASE_ANON_KEY=
+SUPABASE_SERVICE_ROLE_KEY=
+SUPABASE_DB_URL=          # only needed for migrations
+GEMINI_API_KEY=
+```
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Project map
 
-## Learn More
+```
+app/
+  page.tsx              landing
+  login/                login
+  signup/               signup with role select
+  app/                  authed shell (sidebar + chat + library)
+  api/
+    upload/             POST: ingest a PDF (chunk + embed)
+    documents/          GET list, DELETE one
+    chat/               POST: embed query, retrieve, generate
+lib/
+  supabase/             server + browser clients, admin client
+  gemini.ts             chat + embed wrappers
+  pdf.ts                PDF text extraction via Gemini (handles scans)
+  chunk.ts              section-aware legal-text chunker
+supabase/migrations/    SQL schema + RLS + RPC
+scripts/                migrate, smoke-test, create-test-user, make-test-pdfs
+middleware.ts           redirects unauthenticated traffic to /login
+```
 
-To learn more about Next.js, take a look at the following resources:
+## Status
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+v0 alpha. No paywall yet. PDF uploads only (URL scraping comes in v1).
