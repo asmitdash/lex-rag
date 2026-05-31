@@ -8,7 +8,8 @@ export const runtime = 'nodejs'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-const MAX_BYTES = 25 * 1024 * 1024 // 25 MB
+const MAX_BYTES = 4 * 1024 * 1024 + 400 * 1024 // ~4.4 MB to stay under Vercel's 4.5 MB cap
+const PUBLIC_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001'
 
 export async function POST(req: Request) {
   const supabase = await getSupabaseServer()
@@ -18,34 +19,63 @@ export async function POST(req: Request) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role')
+    .select('role, default_workspace_id, account_type')
     .eq('id', userId)
     .maybeSingle()
   const role = (profile?.role ?? 'lawyer') as 'ca' | 'lawyer'
+  const myWorkspaceId = profile?.default_workspace_id as string | null
+  if (!myWorkspaceId) {
+    return NextResponse.json({ error: 'no workspace assigned' }, { status: 500 })
+  }
 
-  const form = await req.formData()
+  let form: FormData
+  try {
+    form = await req.formData()
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : 'invalid form'
+    return NextResponse.json({ error: msg }, { status: 413 })
+  }
   const file = form.get('file') as File | null
   const title = (form.get('title') as string | null) ?? file?.name ?? 'Untitled'
+  const visibility = ((form.get('visibility') as string | null) ?? 'private').toLowerCase()
+  const sourceUrl = (form.get('source_url') as string | null) ?? null
   let category = (form.get('category') as 'ca' | 'non_ca' | null) ?? 'non_ca'
-  // CA users can only upload CA-categorised docs (everything they own is CA).
   if (role === 'ca') category = 'ca'
 
   if (!file) return NextResponse.json({ error: 'no file' }, { status: 400 })
-  if (file.size > MAX_BYTES)
-    return NextResponse.json({ error: 'file too large (max 25 MB)' }, { status: 400 })
+  if (file.size > MAX_BYTES) {
+    return NextResponse.json(
+      {
+        error:
+          `File is ${(file.size / (1024 * 1024)).toFixed(1)} MB. ` +
+          `Vercel limits uploads to 4.5 MB on the current plan. Split this PDF or use a smaller version.`,
+      },
+      { status: 413 },
+    )
+  }
   if (!file.type.includes('pdf') && !file.name.toLowerCase().endsWith('.pdf'))
     return NextResponse.json({ error: 'only PDFs are accepted in v0' }, { status: 400 })
 
+  const isPublic = visibility === 'public'
+  const targetWorkspaceId = isPublic ? PUBLIC_WORKSPACE_ID : myWorkspaceId
+  // Public corpus uploads must come with a source URL (govt source per disclaimer).
+  if (isPublic && (!sourceUrl || sourceUrl.trim().length < 8)) {
+    return NextResponse.json(
+      { error: 'Public corpus uploads require an official source URL.' },
+      { status: 400 },
+    )
+  }
+
   const admin = getSupabaseAdmin()
 
-  // Insert doc as processing
   const { data: doc, error: insErr } = await admin
     .from('documents')
     .insert({
       owner_id: userId,
+      workspace_id: targetWorkspaceId,
       title,
       category,
-      source_type: 'pdf',
+      source_type: isPublic ? 'url' : 'pdf',
       status: 'processing',
       byte_size: file.size,
     })
@@ -65,7 +95,6 @@ export async function POST(req: Request) {
     const chunks = chunkText(text)
     if (!chunks.length) throw new Error('No chunks produced')
 
-    // Embed in manageable batches to respect rate limits
     const BATCH = 16
     let inserted = 0
     for (let i = 0; i < chunks.length; i += BATCH) {
@@ -74,10 +103,15 @@ export async function POST(req: Request) {
       const rows = slice.map((c, j) => ({
         document_id: docId,
         owner_id: userId,
+        workspace_id: targetWorkspaceId,
         category,
         chunk_index: i + j,
         content: c.text,
-        section_meta: c.meta ?? null,
+        section_meta: c.meta
+          ? { ...c.meta, source_url: sourceUrl ?? undefined }
+          : sourceUrl
+          ? { source_url: sourceUrl }
+          : null,
         embedding: toPgvector(vectors[j]),
       }))
       const { error: chunkErr } = await admin.from('chunks').insert(rows)
@@ -103,6 +137,5 @@ function toPgvector(v: number[]): string {
 }
 
 function estimatePages(text: string): number {
-  // Rough estimate: ~3000 chars per page
   return Math.max(1, Math.ceil(text.length / 3000))
 }

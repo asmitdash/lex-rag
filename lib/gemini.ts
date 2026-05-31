@@ -1,7 +1,5 @@
 import { GoogleGenAI } from '@google/genai'
-
-const apiKey = process.env.GEMINI_API_KEY!
-export const genai = new GoogleGenAI({ apiKey })
+import { withGeminiKey } from './key-pool'
 
 export const MODELS = {
   chat: 'gemini-2.5-flash',
@@ -10,27 +8,31 @@ export const MODELS = {
 
 export const EMBED_DIM = 768
 
-// Embed a batch of strings; returns 768-dim vectors.
+function clientFor(key: string) {
+  return new GoogleGenAI({ apiKey: key })
+}
+
 export async function embedBatch(texts: string[]): Promise<number[][]> {
   if (!texts.length) return []
-  // gemini-embedding-001 supports outputDimensionality + RETRIEVAL_DOCUMENT/QUERY task types
   const out: number[][] = []
-  // SDK only allows one input per call for this model; do them in series with a small concurrency
   const concurrency = 4
   let i = 0
   async function worker() {
     while (i < texts.length) {
       const idx = i++
-      const res = await genai.models.embedContent({
-        model: MODELS.embed,
-        contents: texts[idx],
-        config: {
-          outputDimensionality: EMBED_DIM,
-          taskType: 'RETRIEVAL_DOCUMENT',
-        },
+      const v = await withGeminiKey('embed', async key => {
+        const res = await clientFor(key).models.embedContent({
+          model: MODELS.embed,
+          contents: texts[idx],
+          config: {
+            outputDimensionality: EMBED_DIM,
+            taskType: 'RETRIEVAL_DOCUMENT',
+          },
+        })
+        const vec = res.embeddings?.[0]?.values
+        if (!vec) throw new Error('No embedding returned')
+        return vec
       })
-      const v = res.embeddings?.[0]?.values
-      if (!v) throw new Error('No embedding returned')
       out[idx] = v
     }
   }
@@ -39,17 +41,19 @@ export async function embedBatch(texts: string[]): Promise<number[][]> {
 }
 
 export async function embedQuery(text: string): Promise<number[]> {
-  const res = await genai.models.embedContent({
-    model: MODELS.embed,
-    contents: text,
-    config: {
-      outputDimensionality: EMBED_DIM,
-      taskType: 'RETRIEVAL_QUERY',
-    },
+  return withGeminiKey('embed', async key => {
+    const res = await clientFor(key).models.embedContent({
+      model: MODELS.embed,
+      contents: text,
+      config: {
+        outputDimensionality: EMBED_DIM,
+        taskType: 'RETRIEVAL_QUERY',
+      },
+    })
+    const v = res.embeddings?.[0]?.values
+    if (!v) throw new Error('No embedding returned')
+    return v
   })
-  const v = res.embeddings?.[0]?.values
-  if (!v) throw new Error('No embedding returned')
-  return v
 }
 
 export async function generateAnswer(opts: {
@@ -59,7 +63,6 @@ export async function generateAnswer(opts: {
   context: string
 }): Promise<string> {
   const { systemPrompt, history, userMessage, context } = opts
-
   const contents = [
     ...history.map(h => ({ role: h.role, parts: [{ text: h.text }] })),
     {
@@ -73,11 +76,37 @@ export async function generateAnswer(opts: {
       ],
     },
   ]
-
-  const res = await genai.models.generateContent({
-    model: MODELS.chat,
-    contents,
-    config: { systemInstruction: systemPrompt, temperature: 0.2 },
+  return withGeminiKey('chat', async key => {
+    const res = await clientFor(key).models.generateContent({
+      model: MODELS.chat,
+      contents,
+      config: { systemInstruction: systemPrompt, temperature: 0.2 },
+    })
+    return res.text ?? ''
   })
-  return res.text ?? ''
+}
+
+export async function extractPdfWithGemini(buf: Buffer, mimeType = 'application/pdf'): Promise<string> {
+  const base64 = buf.toString('base64')
+  return withGeminiKey('chat', async key => {
+    const res = await clientFor(key).models.generateContent({
+      model: MODELS.chat,
+      contents: [
+        {
+          role: 'user',
+          parts: [
+            { inlineData: { data: base64, mimeType } },
+            {
+              text:
+                'Extract the full text content of this PDF. Preserve section / chapter / article ' +
+                'headings exactly as they appear (e.g. "Section 103", "Chapter II"). Output only ' +
+                'the document text, no commentary, no markdown fences.',
+            },
+          ],
+        },
+      ],
+      config: { temperature: 0 },
+    })
+    return res.text ?? ''
+  })
 }

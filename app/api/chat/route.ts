@@ -71,10 +71,12 @@ export async function POST(req: Request) {
     id: string
     document_id: string
     content: string
-    section_meta: { section?: string } | null
+    section_meta: { section?: string; source_url?: string } | null
     category: 'ca' | 'non_ca'
+    workspace_id: string
     similarity: number
   }
+  const PUBLIC_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001'
   const top = (matches ?? []) as Match[]
 
   // Pull document titles for citations
@@ -125,6 +127,8 @@ export async function POST(req: Request) {
     section: m.section_meta?.section ?? null,
     category: m.category,
     similarity: m.similarity,
+    visibility: m.workspace_id === PUBLIC_WORKSPACE_ID ? 'public' : 'workspace',
+    source_url: m.section_meta?.source_url ?? null,
     snippet: m.content.length > 600 ? m.content.slice(0, 600) + '…' : m.content,
   }))
 

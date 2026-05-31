@@ -8,6 +8,8 @@ type Citation = {
   section?: string | null
   category: 'ca' | 'non_ca'
   similarity: number
+  visibility: 'public' | 'workspace'
+  source_url?: string | null
   snippet: string
 }
 
@@ -156,10 +158,20 @@ function MessageBubble({ m }: { m: Message }) {
                   {c.section ? ` · ${c.section}` : ''}
                 </span>
                 <span className="text-zinc-500 shrink-0">
-                  {(c.similarity * 100).toFixed(0)}% · {c.category === 'ca' ? 'CA' : 'Law'}
+                  {(c.similarity * 100).toFixed(0)}% · {c.category === 'ca' ? 'CA' : 'Law'} ·{' '}
+                  {c.visibility === 'public' ? 'Public' : 'Mine'}
                 </span>
               </summary>
-              <div className="px-3 pb-3 text-zinc-700 whitespace-pre-wrap">{c.snippet}</div>
+              <div className="px-3 pb-3 text-zinc-700 whitespace-pre-wrap">
+                {c.snippet}
+                {c.source_url && (
+                  <div className="mt-2">
+                    <a href={c.source_url} target="_blank" rel="noreferrer" className="underline">
+                      Open source ↗
+                    </a>
+                  </div>
+                )}
+              </div>
             </details>
           ))}
         </div>

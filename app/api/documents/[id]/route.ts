@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server'
-import { getSupabaseServer } from '@/lib/supabase/server'
+import { getSupabaseServer, getSupabaseAdmin } from '@/lib/supabase/server'
 
 export const dynamic = 'force-dynamic'
 
@@ -11,7 +11,9 @@ export async function DELETE(
   const supabase = await getSupabaseServer()
   const { data: userData } = await supabase.auth.getUser()
   if (!userData.user) return NextResponse.json({ error: 'unauthenticated' }, { status: 401 })
-  const { error } = await supabase
+  const admin = getSupabaseAdmin()
+  // Only the original uploader can delete (RLS would also block others, but we are using admin client).
+  const { error } = await admin
     .from('documents')
     .delete()
     .eq('id', id)
