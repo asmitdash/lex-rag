@@ -3,13 +3,24 @@ import { getSupabaseServer, getSupabaseAdmin } from '@/lib/supabase/server'
 import { extractPdfText } from '@/lib/pdf'
 import { chunkText } from '@/lib/chunk'
 import { embedBatch } from '@/lib/gemini'
+import { contextualizeChunks } from '@/lib/retrieval/contextual'
+import { extractGraph, persistGraph } from '@/lib/graph/ingest'
 
 export const runtime = 'nodejs'
 export const maxDuration = 300
 export const dynamic = 'force-dynamic'
 
-const MAX_BYTES = 4 * 1024 * 1024 + 400 * 1024 // ~4.4 MB to stay under Vercel's 4.5 MB cap
+const MAX_BYTES = 4 * 1024 * 1024 + 400 * 1024 // ~4.4 MB
 const PUBLIC_WORKSPACE_ID = '00000000-0000-0000-0000-000000000001'
+
+function parseTags(raw: string | null): string[] {
+  if (!raw) return []
+  return raw
+    .split(',')
+    .map(s => s.trim().toLowerCase())
+    .filter(Boolean)
+    .slice(0, 16)
+}
 
 export async function POST(req: Request) {
   const supabase = await getSupabaseServer()
@@ -19,10 +30,9 @@ export async function POST(req: Request) {
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, default_workspace_id, account_type')
+    .select('default_workspace_id, account_type')
     .eq('id', userId)
     .maybeSingle()
-  const role = (profile?.role ?? 'lawyer') as 'ca' | 'lawyer'
   const myWorkspaceId = profile?.default_workspace_id as string | null
   if (!myWorkspaceId) {
     return NextResponse.json({ error: 'no workspace assigned' }, { status: 500 })
@@ -39,8 +49,7 @@ export async function POST(req: Request) {
   const title = (form.get('title') as string | null) ?? file?.name ?? 'Untitled'
   const visibility = ((form.get('visibility') as string | null) ?? 'private').toLowerCase()
   const sourceUrl = (form.get('source_url') as string | null) ?? null
-  let category = (form.get('category') as 'ca' | 'non_ca' | null) ?? 'non_ca'
-  if (role === 'ca') category = 'ca'
+  const tags = parseTags(form.get('tags') as string | null)
 
   if (!file) return NextResponse.json({ error: 'no file' }, { status: 400 })
   if (file.size > MAX_BYTES) {
@@ -58,10 +67,9 @@ export async function POST(req: Request) {
 
   const isPublic = visibility === 'public'
   const targetWorkspaceId = isPublic ? PUBLIC_WORKSPACE_ID : myWorkspaceId
-  // Public corpus uploads must come with a source URL (govt source per disclaimer).
   if (isPublic && (!sourceUrl || sourceUrl.trim().length < 8)) {
     return NextResponse.json(
-      { error: 'Public corpus uploads require an official source URL.' },
+      { error: 'Public corpus uploads require a source URL.' },
       { status: 400 },
     )
   }
@@ -74,7 +82,8 @@ export async function POST(req: Request) {
       owner_id: userId,
       workspace_id: targetWorkspaceId,
       title,
-      category,
+      tags,
+      corpus_kind: isPublic ? 'public' : 'user',
       source_type: isPublic ? 'url' : 'pdf',
       status: 'processing',
       byte_size: file.size,
@@ -95,18 +104,24 @@ export async function POST(req: Request) {
     const chunks = chunkText(text)
     if (!chunks.length) throw new Error('No chunks produced')
 
+    // Contextual retrieval (Anthropic-style): every chunk gets a 50-100 token
+    // doc-context preamble before embedding. Best-effort; falls back to raw.
+    const contextual = await contextualizeChunks(title, text, chunks)
+
     const BATCH = 16
     let inserted = 0
-    for (let i = 0; i < chunks.length; i += BATCH) {
-      const slice = chunks.slice(i, i + BATCH)
-      const vectors = await embedBatch(slice.map(c => c.text))
+    const insertedIds: string[] = []
+    for (let i = 0; i < contextual.length; i += BATCH) {
+      const slice = contextual.slice(i, i + BATCH)
+      const vectors = await embedBatch(slice.map(c => `${c.preamble}\n\n${c.text}`))
       const rows = slice.map((c, j) => ({
         document_id: docId,
         owner_id: userId,
         workspace_id: targetWorkspaceId,
-        category,
+        tags,
         chunk_index: i + j,
         content: c.text,
+        context_preamble: c.preamble,
         section_meta: c.meta
           ? { ...c.meta, source_url: sourceUrl ?? undefined }
           : sourceUrl
@@ -114,9 +129,27 @@ export async function POST(req: Request) {
           : null,
         embedding: toPgvector(vectors[j]),
       }))
-      const { error: chunkErr } = await admin.from('chunks').insert(rows)
+      const { data: ins, error: chunkErr } = await admin
+        .from('chunks')
+        .insert(rows)
+        .select('id')
       if (chunkErr) throw new Error(`chunk insert failed: ${chunkErr.message}`)
       inserted += rows.length
+      for (const r of ins ?? []) insertedIds.push(r.id as string)
+    }
+
+    // GraphRAG: extract entities + edges in the background, store on the workspace.
+    // Failure here must not fail the whole upload — graph layer is supplementary.
+    try {
+      const graph = await extractGraph(
+        contextual.map((c, idx) => ({
+          id: insertedIds[idx],
+          text: c.text,
+        })),
+      )
+      await persistGraph(admin, targetWorkspaceId, graph)
+    } catch (graphErr) {
+      console.warn('graph extraction failed:', graphErr)
     }
 
     await admin

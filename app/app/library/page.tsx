@@ -10,7 +10,7 @@ export default async function LibraryPage() {
   const { data: userData } = await supabase.auth.getUser()
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, account_type')
+    .select('account_type')
     .eq('id', userData.user!.id)
     .maybeSingle()
 
@@ -24,7 +24,7 @@ export default async function LibraryPage() {
 
   const { data: docs } = await admin
     .from('documents')
-    .select('id, title, category, status, page_count, byte_size, error_message, created_at, workspace_id, owner_id')
+    .select('id, title, tags, status, page_count, byte_size, error_message, created_at, workspace_id, owner_id')
     .in('workspace_id', ids)
     .order('created_at', { ascending: false })
 
@@ -36,7 +36,6 @@ export default async function LibraryPage() {
 
   return (
     <LibraryUI
-      role={(profile?.role ?? 'lawyer') as 'ca' | 'lawyer'}
       accountType={(profile?.account_type ?? 'personal') as 'personal' | 'company'}
       initialDocs={enriched}
     />

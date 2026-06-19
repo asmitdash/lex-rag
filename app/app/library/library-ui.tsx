@@ -6,7 +6,7 @@ import { useRouter } from 'next/navigation'
 type Doc = {
   id: string
   title: string
-  category: 'ca' | 'non_ca'
+  tags: string[] | null
   status: 'processing' | 'ready' | 'failed'
   page_count: number | null
   byte_size: number | null
@@ -21,11 +21,9 @@ type Doc = {
 const MAX_BYTES = 4 * 1024 * 1024 + 400 * 1024 // ~4.4 MB
 
 export function LibraryUI({
-  role,
   initialDocs,
   accountType,
 }: {
-  role: 'ca' | 'lawyer'
   accountType: 'personal' | 'company'
   initialDocs: Doc[]
 }) {
@@ -33,10 +31,10 @@ export function LibraryUI({
   const [docs, setDocs] = useState<Doc[]>(initialDocs)
   const [uploading, setUploading] = useState(false)
   const [err, setErr] = useState<string | null>(null)
-  const [category, setCategory] = useState<'ca' | 'non_ca'>(role === 'ca' ? 'ca' : 'non_ca')
+  const [tagInput, setTagInput] = useState('')
+  const [tags, setTags] = useState<string[]>([])
   const [visibility, setVisibility] = useState<'workspace' | 'public'>('workspace')
   const [sourceUrl, setSourceUrl] = useState('')
-  const [confirmedDisclaimer, setConfirmedDisclaimer] = useState(false)
   const [filterTab, setFilterTab] = useState<'workspace' | 'public'>('workspace')
   const fileInputRef = useRef<HTMLInputElement>(null)
 
@@ -52,6 +50,16 @@ export function LibraryUI({
     return () => clearInterval(t)
   }, [docs])
 
+  function addTag() {
+    const t = tagInput.trim().toLowerCase()
+    if (!t) return
+    if (!tags.includes(t)) setTags([...tags, t])
+    setTagInput('')
+  }
+  function removeTag(t: string) {
+    setTags(tags.filter(x => x !== t))
+  }
+
   async function onFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0]
     if (!f) return
@@ -65,12 +73,7 @@ export function LibraryUI({
       return
     }
     if (visibility === 'public' && !sourceUrl.trim()) {
-      setErr('Public corpus uploads require an official source URL (indiacode, sci.gov.in, pib.gov.in, etc).')
-      e.target.value = ''
-      return
-    }
-    if (visibility === 'public' && !confirmedDisclaimer) {
-      setErr('Please confirm the public corpus disclaimer first.')
+      setErr('Public corpus uploads require a source URL.')
       e.target.value = ''
       return
     }
@@ -80,7 +83,7 @@ export function LibraryUI({
       const fd = new FormData()
       fd.append('file', f)
       fd.append('title', f.name)
-      fd.append('category', role === 'ca' ? 'ca' : category)
+      fd.append('tags', tags.join(','))
       fd.append('visibility', visibility)
       if (sourceUrl.trim()) fd.append('source_url', sourceUrl.trim())
       const res = await fetch('/api/upload', { method: 'POST', body: fd })
@@ -101,6 +104,7 @@ export function LibraryUI({
           setDocs(data.documents)
         }
         setSourceUrl('')
+        setTags([])
       }
     } finally {
       setUploading(false)
@@ -126,7 +130,7 @@ export function LibraryUI({
               {accountType === 'company'
                 ? 'Company workspace — visible to everyone using this account.'
                 : 'Personal workspace — only you see your private uploads.'}{' '}
-              Public corpus is shared by everyone on LexRAG.
+              Public corpus is shared by everyone.
             </p>
           </div>
         </div>
@@ -159,46 +163,53 @@ export function LibraryUI({
               >
                 Public corpus (everyone)
               </button>
+            </div>
 
-              {role === 'lawyer' && (
-                <>
-                  <span className="text-xs font-medium text-zinc-700 ml-3">Category:</span>
-                  <select
-                    value={category}
-                    onChange={e => setCategory(e.target.value as 'ca' | 'non_ca')}
-                    className="input !w-auto !py-1 !text-xs"
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-xs font-medium text-zinc-700">Tags:</span>
+              {tags.map(t => (
+                <span
+                  key={t}
+                  className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-zinc-100 text-xs"
+                >
+                  {t}
+                  <button
+                    type="button"
+                    onClick={() => removeTag(t)}
+                    className="text-zinc-500 hover:text-red-600"
                   >
-                    <option value="non_ca">Law (non-CA)</option>
-                    <option value="ca">CA / Tax</option>
-                  </select>
-                </>
-              )}
+                    ×
+                  </button>
+                </span>
+              ))}
+              <input
+                type="text"
+                value={tagInput}
+                onChange={e => setTagInput(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter' || e.key === ',') {
+                    e.preventDefault()
+                    addTag()
+                  }
+                }}
+                placeholder="add a tag…"
+                className="input !text-xs !w-40 !py-1"
+              />
             </div>
 
             {visibility === 'public' && (
               <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-xs space-y-2">
                 <p>
-                  <strong>Public corpus disclaimer.</strong> Upload only documents from official
-                  Indian government sources (indiacode.nic.in, sci.gov.in, pib.gov.in, cbdt /
-                  cbic / rbi / mca, Gazette of India). Do not upload commentaries, paid databases
-                  (Manupatra, SCC Online), or articles. You confirm you have the right to share this
-                  publicly.
+                  Public corpus uploads must include a source URL. You confirm you have the right to
+                  share this publicly.
                 </p>
                 <input
                   type="text"
                   value={sourceUrl}
                   onChange={e => setSourceUrl(e.target.value)}
-                  placeholder="Source URL (e.g. https://indiacode.nic.in/...)"
+                  placeholder="Source URL (https://…)"
                   className="input !text-xs"
                 />
-                <label className="flex items-center gap-2">
-                  <input
-                    type="checkbox"
-                    checked={confirmedDisclaimer}
-                    onChange={e => setConfirmedDisclaimer(e.target.checked)}
-                  />
-                  <span>I confirm this is from an official Indian government source.</span>
-                </label>
               </div>
             )}
           </div>
@@ -242,7 +253,7 @@ export function LibraryUI({
 
         {visibleDocs.length === 0 ? (
           <div className="text-center text-zinc-500 mt-16">
-            <p>{filterTab === 'public' ? 'Public corpus is still being seeded.' : 'No documents yet.'}</p>
+            <p>{filterTab === 'public' ? 'Public corpus is empty.' : 'No documents yet.'}</p>
             <p className="text-sm mt-1">
               {filterTab === 'workspace' ? 'Upload your first PDF to start asking questions.' : ''}
             </p>
@@ -254,9 +265,9 @@ export function LibraryUI({
                 <div className="min-w-0">
                   <div className="font-medium text-sm truncate">{d.title}</div>
                   <div className="text-xs text-zinc-500 mt-0.5 flex items-center gap-2 flex-wrap">
-                    <Badge color={d.category === 'ca' ? 'emerald' : 'indigo'}>
-                      {d.category === 'ca' ? 'CA' : 'Law'}
-                    </Badge>
+                    {(d.tags ?? []).map(t => (
+                      <Badge key={t} color="zinc">{t}</Badge>
+                    ))}
                     <Badge color={d.visibility === 'public' ? 'sky' : 'zinc'}>
                       {d.visibility === 'public' ? 'Public' : 'Private'}
                     </Badge>
@@ -323,10 +334,8 @@ function StatusBadge({ status }: { status: Doc['status'] }) {
   )
 }
 
-function Badge({ color, children }: { color: 'emerald' | 'indigo' | 'sky' | 'zinc'; children: React.ReactNode }) {
+function Badge({ color, children }: { color: 'sky' | 'zinc'; children: React.ReactNode }) {
   const map = {
-    emerald: 'bg-emerald-100 text-emerald-800',
-    indigo: 'bg-indigo-100 text-indigo-800',
     sky: 'bg-sky-100 text-sky-800',
     zinc: 'bg-zinc-100 text-zinc-700',
   }

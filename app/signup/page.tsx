@@ -9,7 +9,6 @@ export default function SignupPage() {
   const router = useRouter()
   const supabase = getSupabaseBrowser()
   const [accountType, setAccountType] = useState<'personal' | 'company'>('personal')
-  const [role, setRole] = useState<'ca' | 'lawyer'>('lawyer')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [name, setName] = useState('')
@@ -26,7 +25,6 @@ export default function SignupPage() {
       password,
       options: {
         data: {
-          role,
           account_type: accountType,
           full_name: name,
           company_name: accountType === 'company' ? companyName : null,
@@ -68,30 +66,6 @@ export default function SignupPage() {
             </div>
           </div>
 
-          <div>
-            <label className="text-sm font-medium">Profession</label>
-            <div className="mt-2 grid grid-cols-2 gap-3">
-              <Card
-                selected={role === 'ca'}
-                onClick={() => setRole('ca')}
-                title="Chartered Accountant"
-                body="See only CA documents (tax, GST, notices)."
-              />
-              <Card
-                selected={role === 'lawyer'}
-                onClick={() => setRole('lawyer')}
-                title="Lawyer"
-                body="See all documents — law + CA."
-              />
-            </div>
-            {accountType === 'company' && (
-              <p className="mt-2 text-xs text-zinc-500">
-                A company account is for one profession. If your firm has both CAs and Lawyers,
-                create two company accounts.
-              </p>
-            )}
-          </div>
-
           {accountType === 'company' && (
             <Field label="Company name">
               <input
@@ -99,7 +73,7 @@ export default function SignupPage() {
                 value={companyName}
                 onChange={e => setCompanyName(e.target.value)}
                 className="input"
-                placeholder="Sharma & Associates"
+                placeholder="Acme Research"
               />
             </Field>
           )}
@@ -110,7 +84,7 @@ export default function SignupPage() {
               value={name}
               onChange={e => setName(e.target.value)}
               className="input"
-              placeholder="Asmit Dash"
+              placeholder="Your name"
             />
           </Field>
 
@@ -121,7 +95,7 @@ export default function SignupPage() {
               value={email}
               onChange={e => setEmail(e.target.value)}
               className="input"
-              placeholder="you@firm.in"
+              placeholder="you@company.com"
             />
           </Field>
 

@@ -4,8 +4,14 @@ export default function Home() {
   return (
     <main className="flex flex-1 flex-col">
       <header className="flex items-center justify-between px-6 py-4 border-b border-zinc-200 bg-white">
-        <div className="font-semibold text-lg tracking-tight">LexRAG</div>
+        <div className="font-semibold text-lg tracking-tight">Lex-Rag</div>
         <nav className="flex items-center gap-3">
+          <Link
+            href="/use-cases"
+            className="text-sm px-3 py-1.5 rounded-md hover:bg-zinc-100"
+          >
+            Use cases
+          </Link>
           <Link
             href="/login"
             className="text-sm px-3 py-1.5 rounded-md hover:bg-zinc-100"
@@ -24,13 +30,12 @@ export default function Home() {
       <section className="flex-1 flex items-center justify-center px-6 py-20">
         <div className="max-w-3xl">
           <h1 className="text-4xl sm:text-5xl font-semibold tracking-tight leading-tight">
-            AI assistant for Indian CAs &amp; Lawyers.
+            The most advanced RAG system you can run.
           </h1>
           <p className="mt-5 text-lg text-zinc-600 max-w-2xl">
-            Upload your books, statutes and notes. Ask questions in plain English
-            and get answers grounded in your own corpus — with citations to the
-            source. Built on the latest Indian codes (BNS / BNSS / BSA) and the
-            IT &amp; GST Acts.
+            Hybrid retrieval (BM25 + vector + RRF), cross-encoder reranking,
+            agentic multi-hop, GraphRAG, and Self-RAG critique — over your own
+            corpus, the live web, or both. Cited answers grounded in evidence.
           </p>
           <div className="mt-8 flex gap-3">
             <Link
@@ -40,20 +45,24 @@ export default function Home() {
               Get started — free alpha
             </Link>
             <Link
-              href="/login"
+              href="/use-cases"
               className="inline-flex items-center justify-center px-5 py-2.5 rounded-md border border-zinc-300 hover:bg-zinc-100"
             >
-              I have an account
+              See use cases
             </Link>
           </div>
-          <div className="mt-12 grid grid-cols-1 sm:grid-cols-2 gap-6">
+          <div className="mt-12 grid grid-cols-1 sm:grid-cols-3 gap-6">
             <FeatureCard
-              title="For CAs"
-              body="Upload IT Act, GST Acts, your client notes and notice templates. Get drafted replies and section-cited research."
+              title="Pluggable corpus"
+              body="Your private docs, the live web, or both fused. Same orchestrator, three modes."
             />
             <FeatureCard
-              title="For Lawyers"
-              body="BNS / BNSS / BSA-aware research. Upload firm precedents, commentaries and judgments. CAs see only CA work — Lawyers see everything."
+              title="Top-of-class retrieval"
+              body="Contextual embeddings, hybrid BM25+vector RRF, BGE cross-encoder rerank, GraphRAG."
+            />
+            <FeatureCard
+              title="Grounded by default"
+              body="Multi-hop agentic loop with deterministic + LLM-judge self-critique. No hallucinated citations."
             />
           </div>
         </div>

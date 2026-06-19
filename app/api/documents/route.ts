@@ -21,7 +21,7 @@ export async function GET() {
 
   const { data, error } = await admin
     .from('documents')
-    .select('id, title, category, status, page_count, byte_size, error_message, created_at, workspace_id, owner_id')
+    .select('id, title, tags, status, page_count, byte_size, error_message, created_at, workspace_id, owner_id')
     .in('workspace_id', ids)
     .order('created_at', { ascending: false })
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

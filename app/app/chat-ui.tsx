@@ -6,9 +6,10 @@ type Citation = {
   document_id: string
   document_title: string
   section?: string | null
-  category: 'ca' | 'non_ca'
+  tags?: string[]
   similarity: number
-  visibility: 'public' | 'workspace'
+  visibility: 'public' | 'workspace' | 'web'
+  source_type?: 'corpus' | 'web'
   source_url?: string | null
   snippet: string
 }
@@ -20,10 +21,15 @@ type Message = {
   citations?: Citation[]
 }
 
-export function ChatUI({ role, docCount }: { role: 'ca' | 'lawyer'; docCount: number }) {
+type Mode = 'simple' | 'agent'
+type Corpus = 'mine' | 'web' | 'both'
+
+export function ChatUI({ docCount }: { docCount: number }) {
   const [messages, setMessages] = useState<Message[]>([])
   const [input, setInput] = useState('')
   const [loading, setLoading] = useState(false)
+  const [mode, setMode] = useState<Mode>('simple')
+  const [corpus, setCorpus] = useState<Corpus>('mine')
   const scrollRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -43,6 +49,8 @@ export function ChatUI({ role, docCount }: { role: 'ca' | 'lawyer'; docCount: nu
         headers: { 'content-type': 'application/json' },
         body: JSON.stringify({
           message: q,
+          mode,
+          corpus,
           history: messages.map(m => ({ role: m.role, content: m.content })),
         }),
       })
@@ -77,12 +85,28 @@ export function ChatUI({ role, docCount }: { role: 'ca' | 'lawyer'; docCount: nu
 
   return (
     <div className="flex flex-col flex-1 min-h-0">
-      <div className="px-6 py-3 border-b border-zinc-200 bg-white text-sm flex items-center justify-between">
-        <div>
-          <span className="font-medium">Chat</span>{' '}
-          <span className="text-zinc-500">
-            · {role === 'ca' ? 'CA workspace (CA docs only)' : 'Lawyer workspace (CA + Law)'}
-          </span>
+      <div className="px-6 py-3 border-b border-zinc-200 bg-white text-sm flex items-center justify-between gap-4">
+        <div className="flex items-center gap-3">
+          <span className="font-medium">Chat</span>
+          <Segmented
+            label="Mode"
+            value={mode}
+            onChange={v => setMode(v as Mode)}
+            options={[
+              { value: 'simple', label: 'Simple' },
+              { value: 'agent', label: 'Agent' },
+            ]}
+          />
+          <Segmented
+            label="Corpus"
+            value={corpus}
+            onChange={v => setCorpus(v as Corpus)}
+            options={[
+              { value: 'mine', label: 'Mine' },
+              { value: 'web', label: 'Web' },
+              { value: 'both', label: 'Both' },
+            ]}
+          />
         </div>
         <div className="text-xs text-zinc-500">
           {docCount} document{docCount === 1 ? '' : 's'} indexed
@@ -92,11 +116,11 @@ export function ChatUI({ role, docCount }: { role: 'ca' | 'lawyer'; docCount: nu
       <div ref={scrollRef} className="flex-1 overflow-y-auto px-6 py-6">
         {messages.length === 0 && (
           <div className="max-w-2xl mx-auto text-center text-zinc-500 mt-12">
-            <h2 className="text-lg font-medium text-zinc-700">Ask anything from your library.</h2>
+            <h2 className="text-lg font-medium text-zinc-700">Ask anything.</h2>
             <p className="mt-2 text-sm">
               {docCount === 0
-                ? 'Upload a PDF in the Library tab to get started.'
-                : 'Try: "Summarise the key sections of BNS that replaced IPC 302" or "Draft a reply to a Section 143(2) notice."'}
+                ? 'Upload a PDF in the Library tab, switch corpus to Web for live research, or use Both.'
+                : 'Switch to Agent mode for multi-hop research, or stay on Simple for one-shot retrieval.'}
             </p>
           </div>
         )}
@@ -134,6 +158,40 @@ export function ChatUI({ role, docCount }: { role: 'ca' | 'lawyer'; docCount: nu
   )
 }
 
+function Segmented({
+  label,
+  value,
+  onChange,
+  options,
+}: {
+  label: string
+  value: string
+  onChange: (v: string) => void
+  options: { value: string; label: string }[]
+}) {
+  return (
+    <div className="flex items-center gap-1 text-xs">
+      <span className="text-zinc-500">{label}:</span>
+      <div className="inline-flex rounded-md border border-zinc-200 overflow-hidden">
+        {options.map(o => (
+          <button
+            key={o.value}
+            onClick={() => onChange(o.value)}
+            className={
+              'px-2 py-1 ' +
+              (o.value === value
+                ? 'bg-zinc-900 text-white'
+                : 'bg-white text-zinc-700 hover:bg-zinc-100')
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 function MessageBubble({ m }: { m: Message }) {
   if (m.role === 'user') {
     return (
@@ -158,12 +216,24 @@ function MessageBubble({ m }: { m: Message }) {
                   {c.section ? ` · ${c.section}` : ''}
                 </span>
                 <span className="text-zinc-500 shrink-0">
-                  {(c.similarity * 100).toFixed(0)}% · {c.category === 'ca' ? 'CA' : 'Law'} ·{' '}
-                  {c.visibility === 'public' ? 'Public' : 'Mine'}
+                  {(c.similarity * 100).toFixed(0)}% ·{' '}
+                  {c.source_type === 'web' ? 'Web' : c.visibility === 'public' ? 'Public' : 'Mine'}
                 </span>
               </summary>
               <div className="px-3 pb-3 text-zinc-700 whitespace-pre-wrap">
                 {c.snippet}
+                {c.tags && c.tags.length > 0 && (
+                  <div className="mt-2 flex flex-wrap gap-1">
+                    {c.tags.map(t => (
+                      <span
+                        key={t}
+                        className="px-1.5 py-0.5 rounded bg-zinc-100 text-zinc-600"
+                      >
+                        {t}
+                      </span>
+                    ))}
+                  </div>
+                )}
                 {c.source_url && (
                   <div className="mt-2">
                     <a href={c.source_url} target="_blank" rel="noreferrer" className="underline">

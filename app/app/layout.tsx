@@ -12,20 +12,19 @@ export default async function AppLayout({ children }: { children: React.ReactNod
 
   const { data: profile } = await supabase
     .from('profiles')
-    .select('role, full_name, email, account_type')
+    .select('full_name, email, account_type')
     .eq('id', userData.user.id)
     .maybeSingle()
 
-  const role = (profile?.role ?? 'lawyer') as 'ca' | 'lawyer'
   const accountType = (profile?.account_type ?? 'personal') as 'personal' | 'company'
 
   return (
     <div className="flex flex-1 min-h-screen">
       <aside className="w-64 border-r border-zinc-200 bg-white flex flex-col">
         <div className="px-5 py-4 border-b border-zinc-200">
-          <Link href="/app" className="font-semibold tracking-tight">LexRAG</Link>
+          <Link href="/app" className="font-semibold tracking-tight">Lex-Rag</Link>
           <div className="mt-1 text-xs text-zinc-500">
-            {role === 'ca' ? 'Chartered Accountant' : 'Lawyer'} · {accountType === 'company' ? 'Company' : 'Personal'}
+            {accountType === 'company' ? 'Company' : 'Personal'}
           </div>
           <div className="text-[11px] text-zinc-400 truncate">{profile?.email}</div>
         </div>
